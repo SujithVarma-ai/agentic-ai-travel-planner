@@ -60,3 +60,38 @@ Complete AI Travel Plan
 | 💰 Budget Agent         | Calculates estimated trip expenses                     |
 | 🤖 Recommendation Agent | Generates a personalized travel itinerary using Gemini |
 
+---
+
+🔌 API Integrations
+
+🤖 Google Gemini API
+
+Generates personalized travel recommendations and a day-wise itinerary.
+
+📍 Geoapify API
+
+Converts the user-entered destination into geographical coordinates.
+
+```bash
+Destination
+    ↓
+Latitude + Longitude
+```
+
+🏛️ OpenTripMap API
+
+Uses destination coordinates to find real tourist attractions and places to visit.
+
+```bash
+Latitude + Longitude
+        ↓
+OpenTripMap API
+        ↓
+Tourist Attractions
+```
+
+🌦️ Open-Meteo API
+
+Retrieves weather information based on destination coordinates.
+
+---
