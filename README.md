@@ -122,3 +122,33 @@ Gemini Recommendation Agent
         ↓
 Personalized AI Travel Itinerary
 ```
+
+---
+
+## 🖥️ User Interface
+
+The application provides an interactive Gradio dashboard where users can enter:
+
+Origin
+
+Destination
+
+Number of travel days
+
+The application displays:
+
+✈️ Flight options
+
+🏨 Hotel options
+
+📍 Tourist attractions
+
+🌦️ Weather information
+
+💰 Estimated trip budget
+
+🤖 AI-generated travel itinerary
+
+🗺️ Destination map
+
+📊 Agent execution status
