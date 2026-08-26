@@ -46,10 +46,11 @@ Tools
 External APIs / Simulated Data
   ↓
 Complete AI Travel Plan
+```
 
 ---
 
-🤖 Agents
+## 🤖 Agents
 
 | Agent                   | Responsibility                                         |
 | ----------------------- | ------------------------------------------------------ |
@@ -62,7 +63,7 @@ Complete AI Travel Plan
 
 ---
 
-🔌 API Integrations
+## 🔌 API Integrations
 
 🤖 Google Gemini API
 
@@ -95,3 +96,29 @@ Tourist Attractions
 Retrieves weather information based on destination coordinates.
 
 ---
+
+## 🔄 Application Workflow
+
+```text
+User enters trip details
+        ↓
+Gradio UI
+        ↓
+TravelWorkflow
+        ↓
+Geoapify API → Destination Coordinates
+        ↓
+OpenTripMap API → Tourist Attractions
+        ↓
+Open-Meteo API → Weather Information
+        ↓
+Transport Agent → Simulated Flights
+        ↓
+Accommodation Agent → Simulated Hotels
+        ↓
+Budget Agent → Estimated Trip Cost
+        ↓
+Gemini Recommendation Agent
+        ↓
+Personalized AI Travel Itinerary
+```
