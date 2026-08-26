@@ -46,3 +46,17 @@ Tools
 External APIs / Simulated Data
   ↓
 Complete AI Travel Plan
+
+---
+
+🤖 Agents
+
+| Agent                   | Responsibility                                         |
+| ----------------------- | ------------------------------------------------------ |
+| ✈️ Transport Agent      | Provides simulated flight options                      |
+| 🏨 Accommodation Agent  | Provides simulated hotel options                       |
+| 📍 Activity Agent       | Finds real tourist attractions                         |
+| 🌦️ Weather Agent       | Retrieves weather information                          |
+| 💰 Budget Agent         | Calculates estimated trip expenses                     |
+| 🤖 Recommendation Agent | Generates a personalized travel itinerary using Gemini |
+
