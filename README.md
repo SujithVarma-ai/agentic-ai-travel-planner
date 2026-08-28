@@ -164,3 +164,7 @@ OPENTRIPMAP_API_KEY=your_opentripmap_api_key
 ```
 
 ## ▶️ Run the Application
+
+```bash
+python ui/gradio_app.py
+```
