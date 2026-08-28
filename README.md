@@ -168,3 +168,21 @@ OPENTRIPMAP_API_KEY=your_opentripmap_api_key
 ```bash
 python ui/gradio_app.py
 ```
+
+## 🛠️ Technology Stack
+
+Python
+
+Gradio
+
+Google Gemini
+
+Geoapify API
+
+OpenTripMap API
+
+Open-Meteo API
+
+Multi-Agent Architecture
+
+OpenStreetMap
