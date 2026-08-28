@@ -152,3 +152,15 @@ The application displays:
 🗺️ Destination map
 
 📊 Agent execution status
+
+## 🔑 Environment Variables
+
+Create a .env file in the root directory:
+
+```bash
+GEMINI_API_KEY=your_gemini_api_key
+GEOAPIFY_API_KEY=your_geoapify_api_key
+OPENTRIPMAP_API_KEY=your_opentripmap_api_key
+```
+
+## ▶️ Run the Application
