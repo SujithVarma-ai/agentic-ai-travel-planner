@@ -186,3 +186,23 @@ Open-Meteo API
 Multi-Agent Architecture
 
 OpenStreetMap
+
+## 🔮 Future Improvements
+
+Integration with real flight APIs
+
+Integration with real hotel APIs
+
+User authentication
+
+Save previous trips
+
+User travel preferences
+
+Database integration
+
+Cloud deployment
+
+Real-time pricing
+
+Advanced agent orchestration
