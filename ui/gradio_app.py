@@ -5,6 +5,7 @@ import html
 import os
 import sys
 from urllib.parse import quote
+import traceback
 
 import gradio as gr
 
@@ -41,6 +42,7 @@ def money(value):
 # MAP
 # Uses an OpenStreetMap iframe instead of injected JavaScript.
 # ============================================================
+
 
 def create_map(destination, activities):
     points = []
@@ -87,12 +89,14 @@ def create_map(destination, activities):
             f"{points[0][0]}/{points[0][1]}"
         )
 
+        safe_destination = html.escape(
+            str(destination), quote=True
+        )
+
         return f"""
         <div class="map-frame">
             <iframe
-                title="Map of attractions near {
-                    html.escape(str(destination), quote=True)
-                }"
+                title="Map of attractions near {safe_destination}"
                 src="{html.escape(map_url, quote=True)}"
                 width="100%"
                 height="480"
@@ -104,7 +108,6 @@ def create_map(destination, activities):
 
         <p style="font-size:12px;color:#77839a;margin-top:8px">
             Map area is based on coordinates returned by the Activity Agent.
-
             <a href="{html.escape(full_map_url, quote=True)}"
                target="_blank"
                rel="noopener noreferrer">
@@ -132,48 +135,44 @@ def create_map(destination, activities):
     """
 
 
+
 # ============================================================
 # FLIGHT OPTIONS
 # ============================================================
 
-def format_flights(flights):
-    if isinstance(flights, dict) and flights.get("error"):
-        return (
-            "### Flight options unavailable\n\n"
-            f"{safe_text(flights['error'])}\n\n"
-            "*Flight search uses simulated prices for supported "
-            "domestic routes.*"
-        )
 
-    if not flights:
+
+def format_flights(flights):
+    if isinstance(flights, dict):
+        if flights.get("error"):
+            return f"### Flight options unavailable\n\n{flights['error']}"
+        flights = flights.get("transport", [])
+
+    if not isinstance(flights, list) or not flights:
         return "### No flight options returned."
 
     rows = []
 
     for flight in flights:
+        airline = safe_text(flight.get("airline", "Airline"))
+        duration = safe_text(flight.get("duration", "—"))
         stops = int(flight.get("stops", 0) or 0)
-
-        stop_text = (
-            "Non-stop"
-            if stops == 0
-            else f"{stops} stop(s)"
-        )
+        stop_text = "Non-stop" if stops == 0 else f"{stops} stop(s)"
+        price = money(flight.get("price"))
 
         rows.append(
-            f"| {safe_text(flight.get('airline', 'Airline'))} "
-            f"| {safe_text(flight.get('duration', '—'))} "
-            f"| {stop_text} "
-            f"| **{money(flight.get('price'))}** |"
+            f"| {airline} | {duration} | {stop_text} | **{price}** |"
         )
 
     return (
-        "### ✈️ Flight options\n\n"
-        "| Airline | Duration | Stops | Indicative price |\n"
+        "### ✈️ Flight Options\n\n"
+        "| Airline | Duration | Stops | Estimated Fare |\n"
         "|---|---|---|---:|\n"
         + "\n".join(rows)
-        + "\n\n> Prices are simulated estimates, not live fares "
-        "or bookable tickets."
+        + "\n\n> Fares are simulated estimates, not live booking prices."
     )
+
+
 
 
 # ============================================================
@@ -208,33 +207,41 @@ def format_hotels(hotels):
 # TOURIST ATTRACTIONS
 # ============================================================
 
+
 def format_activities(activities):
     if not activities:
         return (
             "### No attractions found.\n\n"
-            "Try another destination or check your "
-            "OpenTripMap API configuration."
+            "Try a nearby town or a larger search radius. "
+            "Check your OpenTripMap API configuration if "
+            "the problem continues."
         )
 
     output = ["### 📍 Places to explore", ""]
 
     for index, activity in enumerate(activities, 1):
-        name = safe_text(
-            activity.get("name", "Attraction")
+        name = safe_text(activity.get("name", "Attraction"))
+        kind = safe_text(
+            activity.get("kind") or "Tourist attraction"
         )
 
-        kind = safe_text(
-            activity.get("kind", "Tourist attraction")
-        )
+        distance = activity.get("distance")
+
+        if isinstance(distance, (int, float)):
+            distance_text = (
+                f"{distance / 1000:.1f} km from search center"
+            )
+        else:
+            distance_text = "Distance unavailable"
 
         output.append(
             f"**{index}. {name}**  \n"
-            f"<small>{kind}</small>"
+            f"<small>{kind} · {distance_text}</small>"
         )
-
         output.append("")
 
     return "\n".join(output)
+
 
 
 # ============================================================
@@ -286,32 +293,38 @@ close to your departure date.*
 
 def format_budget(budget):
     if not isinstance(budget, dict):
+        return "### Budget unavailable\n\nNo valid budget was returned."
+
+    if budget.get("error"):
         return (
-            "### Budget unavailable\n\n"
-            "The budget agent did not return a valid estimate."
+            "### Budget calculation unavailable\n\n"
+            f"{safe_text(budget['error'])}"
         )
 
+    flight_cost = budget.get("flight_cost", 0)
+    hotel_cost = budget.get("hotel_cost", 0)
+    other_cost = budget.get("other_expenses", 0)
+    total_cost = budget.get("total_estimated_cost", 0)
+
+    selected_flight = budget.get("selected_flight") or {}
+    selected_hotel = budget.get("selected_hotel") or {}
+
     return f"""
-### 💳 Estimated trip budget
+### 💳 Estimated Trip Budget
 
 <div class="budget-total">
-    <span>Estimated total</span>
-
-    <strong>
-        {money(budget.get('total_estimated_cost'))}
-    </strong>
-
+    <span>Estimated Total</span>
+    <strong>{money(total_cost)}</strong>
     <small>Indicative estimate · INR</small>
 </div>
 
-| Expense | Estimate |
-|---|---:|
-| ✈️ Flight | {money(budget.get('flight_cost'))} |
-| 🏨 Accommodation | {money(budget.get('hotel_cost'))} |
-| 🍽️ Food and local expenses | {money(budget.get('other_expenses'))} |
+| Expense | Details | Estimated Cost |
+|---|---|---:|
+| ✈️ Flight | {safe_text(selected_flight.get("airline", "Selected flight"))} | **{money(flight_cost)}** |
+| 🏨 Accommodation | {safe_text(selected_hotel.get("name", "Selected hotel"))} | **{money(hotel_cost)}** |
+| 🍽️ Food and local expenses | Estimated expenses | **{money(other_cost)}** |
 
-> This is a rough estimate based on the current budget agent.
-> Flight and hotel data are simulated.
+> Flight and hotel prices are simulated estimates, not live booking prices.
 """
 
 
@@ -488,42 +501,31 @@ def plan_trip(origin, destination, days):
                 "Choose a trip duration between 1 and 30 days."
             )
 
-        # Initial progress display.
+        # Show progress while the agents are running.
         yield (
             status_html("running"),
             gr.update(visible=False),
             "", "", "", "", "", "", "", ""
         )
 
-        # Call your existing agent workflow.
+        # Run the existing multi-agent workflow.
         result = workflow.run(
             origin=origin,
             destination=destination,
             days=days,
         )
 
-        # Extract the existing workflow outputs.
-        flights = (
-            result.get("transport", {}).get("transport", [])
-        )
+        # Extract agent outputs safely.
+        transport_result = result.get("transport") or {}
+        accommodation_result = result.get("accommodation") or {}
+        activities_result = result.get("activities") or {}
+        weather_result = result.get("weather") or {}
 
-        hotels = (
-            result.get("accommodation", {}).get(
-                "accommodation", []
-            )
-        )
-
-        activities = (
-            result.get("activities", {}).get(
-                "activities", []
-            )
-        )
-
-        weather = (
-            result.get("weather", {}).get("weather")
-        )
-
-        budget = result.get("budget", {})
+        flights = transport_result.get("transport", [])
+        hotels = accommodation_result.get("accommodation", [])
+        activities = activities_result.get("activities", [])
+        weather = weather_result.get("weather")
+        budget = result.get("budget") or {}
 
         recommendation = (
             result.get("recommendation")
@@ -533,11 +535,10 @@ def plan_trip(origin, destination, days):
             )
         )
 
-        # Display the completed results.
+        # Display completed results.
         yield (
             status_html("complete"),
             gr.update(visible=True),
-
             summary_cards(
                 origin,
                 destination,
@@ -546,7 +547,6 @@ def plan_trip(origin, destination, days):
                 activities,
                 budget,
             ),
-
             format_flights(flights),
             format_hotels(hotels),
             format_activities(activities),
@@ -556,8 +556,11 @@ def plan_trip(origin, destination, days):
             create_map(destination, activities),
         )
 
-    except Exception as exc:
-        message = safe_text(exc)
+    except Exception as e:
+        traceback.print_exc()
+
+        # Escape the error before inserting it into HTML.
+        message = safe_text(str(e))
 
         yield (
             f"""
@@ -570,11 +573,10 @@ def plan_trip(origin, destination, days):
                 </small>
             </div>
             """,
-
             gr.update(visible=False),
-
             "", "", "", "", "", "", "", ""
         )
+
 
 
 # ============================================================

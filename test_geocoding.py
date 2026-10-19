@@ -1,5 +1,17 @@
+
 from tools.geocoding_tools import get_coordinates
 
-result = get_coordinates("Goa, India")
+destinations = [
+    "Darjeeling, West Bengal",
+    "Pelling, Sikkim",
+    "Gangtok, Sikkim",
+    "Kedarnath, Uttarakhand",
+    "Badrinath, Uttarakhand",
+    "Ziro, Arunachal Pradesh",
+    "Majuli, Assam",
+]
 
-print(result)
+for destination in destinations:
+    print(f"\nSearching: {destination}")
+    result = get_coordinates(destination)
+    print(result)
