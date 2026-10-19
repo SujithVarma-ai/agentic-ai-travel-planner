@@ -366,12 +366,6 @@ External API failures, rate limits, missing coordinates, or invalid credentials 
 
 The objective of Voyage AI is to demonstrate how a multi-agent architecture can coordinate specialized tasks, consume external API data, use a generative AI model for personalized recommendations, and present the combined results through a user-friendly travel planning interface.
 
-## 👨‍💻 Author
-
-**Raja Sujith Varma**
-
-AI/ML Undergraduate | Interested in Generative AI, LLM Applications, and Agentic AI
-
 GitHub: [SujithVarma-ai](https://github.com/SujithVarma-ai)
 
 ---
