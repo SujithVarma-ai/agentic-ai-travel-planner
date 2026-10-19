@@ -1,758 +1,1179 @@
+
+"""Premium Gradio UI for the Agentic AI Travel Planner."""
+
+import html
 import os
 import sys
-import html
+from urllib.parse import quote
+
 import gradio as gr
 
-# Add main project folder to Python path
 PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))
 )
 
 if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
+    sys.path.insert(0, PROJECT_ROOT)
 
 from workflow.travel_workflow import TravelWorkflow
-
 
 workflow = TravelWorkflow()
 
 
-# ---------------------------------------------------
-# CREATE MAP
-# ---------------------------------------------------
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def safe_text(value):
+    return html.escape(
+        str(value if value is not None else "—")
+    )
+
+
+def money(value):
+    try:
+        return f"₹{float(value):,.0f}"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+# ============================================================
+# MAP
+# Uses an OpenStreetMap iframe instead of injected JavaScript.
+# ============================================================
 
 def create_map(destination, activities):
+    points = []
 
-    if not activities:
-        return """
-        <div class="empty-card">
-            No location data available.
-        </div>
-        """
+    for item in activities or []:
+        try:
+            lat = float(item["latitude"])
+            lon = float(item["longitude"])
 
-    first_lat = activities[0].get("latitude")
-    first_lon = activities[0].get("longitude")
+            if -90 <= lat <= 90 and -180 <= lon <= 180:
+                points.append((lat, lon))
 
-    if first_lat is None or first_lon is None:
-        return """
-        <div class="empty-card">
-            Map coordinates are not available.
-        </div>
-        """
+        except (KeyError, TypeError, ValueError):
+            continue
 
-    markers = ""
+    if points:
+        latitudes = [point[0] for point in points]
+        longitudes = [point[1] for point in points]
 
-    for activity in activities:
+        padding = 0.02
 
-        name = html.escape(
-            str(activity.get("name", "Unknown Place"))
+        west = max(-180, min(longitudes) - padding)
+        east = min(180, max(longitudes) + padding)
+        south = max(-90, min(latitudes) - padding)
+        north = min(90, max(latitudes) + padding)
+
+        if west == east:
+            west = max(-180, west - padding)
+            east = min(180, east + padding)
+
+        if south == north:
+            south = max(-90, south - padding)
+            north = min(90, north + padding)
+
+        bbox = f"{west},{south},{east},{north}"
+
+        map_url = (
+            "https://www.openstreetmap.org/export/embed.html?bbox="
+            + quote(bbox, safe=",")
         )
 
-        kind = html.escape(
-            str(activity.get("kind", "Tourist Attraction"))
+        full_map_url = (
+            "https://www.openstreetmap.org/#map=12/"
+            f"{points[0][0]}/{points[0][1]}"
         )
 
-        lat = activity.get("latitude")
-        lon = activity.get("longitude")
+        return f"""
+        <div class="map-frame">
+            <iframe
+                title="Map of attractions near {
+                    html.escape(str(destination), quote=True)
+                }"
+                src="{html.escape(map_url, quote=True)}"
+                width="100%"
+                height="480"
+                style="border:0"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade">
+            </iframe>
+        </div>
 
-        if lat is not None and lon is not None:
+        <p style="font-size:12px;color:#77839a;margin-top:8px">
+            Map area is based on coordinates returned by the Activity Agent.
 
-            markers += f"""
-            L.marker([{lat}, {lon}])
-                .addTo(map)
-                .bindPopup(
-                    "<b>{name}</b><br>{kind}"
-                );
-            """
+            <a href="{html.escape(full_map_url, quote=True)}"
+               target="_blank"
+               rel="noopener noreferrer">
+                Open larger map
+            </a>
+        </p>
+        """
 
-    destination_name = html.escape(destination)
-
-    map_content = f"""
-    <!DOCTYPE html>
-
-    <html>
-
-    <head>
-
-        <meta charset="utf-8">
-
-        <link
-            rel="stylesheet"
-            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
-
-        <style>
-
-            html,
-            body,
-            #map {{
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                padding: 0;
-            }}
-
-        </style>
-
-    </head>
-
-    <body>
-
-        <div id="map"></div>
-
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-        <script>
-
-            const map = L.map("map").setView(
-                [{first_lat}, {first_lon}],
-                10
-            );
-
-            L.tileLayer(
-                "https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png",
-                {{
-                    maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors"
-                }}
-            ).addTo(map);
-
-            L.marker([{first_lat}, {first_lon}])
-                .addTo(map)
-                .bindPopup("<b>{destination_name}</b>");
-
-            {markers}
-
-        </script>
-
-    </body>
-
-    </html>
-    """
-
-    escaped_content = html.escape(map_content)
+    search_url = (
+        "https://www.openstreetmap.org/search?query="
+        + quote(str(destination))
+    )
 
     return f"""
-    <iframe
-        srcdoc="{escaped_content}"
-        width="100%"
-        height="500"
-        style="
-            border: none;
-            border-radius: 16px;
-        "
-    >
-    </iframe>
+    <div class="empty-state">
+        <p>Attraction coordinates are unavailable.</p>
+
+        <a href="{html.escape(search_url, quote=True)}"
+           target="_blank"
+           rel="noopener noreferrer">
+            View {html.escape(str(destination))}
+            on OpenStreetMap
+        </a>
+    </div>
     """
 
-# ---------------------------------------------------
-# FORMAT FLIGHTS
-# ---------------------------------------------------
+
+# ============================================================
+# FLIGHT OPTIONS
+# ============================================================
 
 def format_flights(flights):
+    if isinstance(flights, dict) and flights.get("error"):
+        return (
+            "### Flight options unavailable\n\n"
+            f"{safe_text(flights['error'])}\n\n"
+            "*Flight search uses simulated prices for supported "
+            "domestic routes.*"
+        )
 
     if not flights:
-        return "## No flight options found."
+        return "### No flight options returned."
 
-    text = "## ✈️ Available Flight Options\n\n"
+    rows = []
 
-    for i, flight in enumerate(flights, start=1):
+    for flight in flights:
+        stops = int(flight.get("stops", 0) or 0)
 
-        stops = flight.get("stops", 0)
+        stop_text = (
+            "Non-stop"
+            if stops == 0
+            else f"{stops} stop(s)"
+        )
 
-        if stops == 0:
-            stop_text = "Non-stop"
-        else:
-            stop_text = f"{stops} stop(s)"
+        rows.append(
+            f"| {safe_text(flight.get('airline', 'Airline'))} "
+            f"| {safe_text(flight.get('duration', '—'))} "
+            f"| {stop_text} "
+            f"| **{money(flight.get('price'))}** |"
+        )
 
-        text += f"""
-### {i}. ✈️ {flight.get("airline", "Unknown Airline")}
-
-| Detail | Information |
-|---|---|
-| 💰 Price | ₹{flight.get("price", "N/A")} |
-| ⏱️ Duration | {flight.get("duration", "N/A")} |
-| 🛑 Stops | {stop_text} |
-
-"""
-
-    text += """
-> ⚠️ **Note:** Flight information is currently simulated for demonstration purposes.
-"""
-
-    return text
+    return (
+        "### ✈️ Flight options\n\n"
+        "| Airline | Duration | Stops | Indicative price |\n"
+        "|---|---|---|---:|\n"
+        + "\n".join(rows)
+        + "\n\n> Prices are simulated estimates, not live fares "
+        "or bookable tickets."
+    )
 
 
-# ---------------------------------------------------
-# FORMAT HOTELS
-# ---------------------------------------------------
+# ============================================================
+# HOTEL OPTIONS
+# ============================================================
 
 def format_hotels(hotels):
-
     if not hotels:
-        return "## No hotel options found."
+        return "### No accommodation options returned."
 
-    text = "## 🏨 Accommodation Options\n\n"
+    rows = []
 
-    for i, hotel in enumerate(hotels, start=1):
+    for hotel in hotels:
+        rows.append(
+            f"| {safe_text(hotel.get('name', 'Hotel'))} "
+            f"| {safe_text(hotel.get('location', '—'))} "
+            f"| {safe_text(hotel.get('rating', '—'))}/5 "
+            f"| **{money(hotel.get('price_per_night'))}** |"
+        )
 
-        text += f"""
-### {i}. 🏨 {hotel.get("name", "Unknown Hotel")}
-
-| Detail | Information |
-|---|---|
-| 📍 Location | {hotel.get("location", "N/A")} |
-| 💰 Per Night | ₹{hotel.get("price_per_night", "N/A")} |
-| ⭐ Rating | {hotel.get("rating", "N/A")} / 5 |
-
-"""
-
-    text += """
-> ⚠️ **Note:** Hotel information is currently simulated for demonstration purposes.
-"""
-
-    return text
+    return (
+        "### 🏨 Accommodation ideas\n\n"
+        "| Property | Area | Rating | Per night |\n"
+        "|---|---|---:|---:|\n"
+        + "\n".join(rows)
+        + "\n\n> Hotel names, ratings and prices are simulated "
+        "examples, not verified listings."
+    )
 
 
-# ---------------------------------------------------
-# FORMAT ACTIVITIES
-# ---------------------------------------------------
+# ============================================================
+# TOURIST ATTRACTIONS
+# ============================================================
 
 def format_activities(activities):
-
     if not activities:
-        return "## No tourist attractions found."
+        return (
+            "### No attractions found.\n\n"
+            "Try another destination or check your "
+            "OpenTripMap API configuration."
+        )
 
-    text = "## 📍 Recommended Places to Visit\n\n"
+    output = ["### 📍 Places to explore", ""]
 
-    for i, activity in enumerate(activities, start=1):
+    for index, activity in enumerate(activities, 1):
+        name = safe_text(
+            activity.get("name", "Attraction")
+        )
 
-        name = activity.get("name", "Unknown Place")
-        kind = activity.get("kind", "Tourist Attraction")
+        kind = safe_text(
+            activity.get("kind", "Tourist attraction")
+        )
 
-        text += f"""
-### {i}. 📍 {name}
+        output.append(
+            f"**{index}. {name}**  \n"
+            f"<small>{kind}</small>"
+        )
 
-**Category:** {kind}
+        output.append("")
 
-"""
-
-    return text
+    return "\n".join(output)
 
 
-# ---------------------------------------------------
-# FORMAT WEATHER
-# ---------------------------------------------------
+# ============================================================
+# WEATHER
+# ============================================================
 
 def format_weather(weather):
+    if not isinstance(weather, dict):
+        return (
+            "### Weather unavailable\n\n"
+            "The weather agent did not return usable data."
+        )
 
     return f"""
-# 🌦️ Current Weather
+### 🌦️ Weather snapshot
 
-| Weather Detail | Value |
-|---|---|
-| 🌡️ Temperature | **{weather.get("temperature", "N/A")}°C** |
-| 💧 Humidity | **{weather.get("humidity", "N/A")}%** |
-| 💨 Wind Speed | **{weather.get("wind_speed", "N/A")} km/h** |
-| ☁️ Weather Code | **{weather.get("weather_code", "N/A")}** |
-| 🌍 Timezone | **{weather.get("timezone", "N/A")}** |
+<div class="weather-grid">
 
+    <div class="weather-tile">
+        <span>Temperature</span>
+        <strong>{safe_text(weather.get('temperature', '—'))}°C</strong>
+    </div>
+
+    <div class="weather-tile">
+        <span>Humidity</span>
+        <strong>{safe_text(weather.get('humidity', '—'))}%</strong>
+    </div>
+
+    <div class="weather-tile">
+        <span>Wind speed</span>
+        <strong>{safe_text(weather.get('wind_speed', '—'))} km/h</strong>
+    </div>
+
+    <div class="weather-tile">
+        <span>Timezone</span>
+        <strong>{safe_text(weather.get('timezone', '—'))}</strong>
+    </div>
+
+</div>
+
+*Weather values are an API snapshot. Check the forecast again
+close to your departure date.*
 """
 
 
-# ---------------------------------------------------
-# FORMAT BUDGET
-# ---------------------------------------------------
+# ============================================================
+# BUDGET
+# ============================================================
 
 def format_budget(budget):
+    if not isinstance(budget, dict):
+        return (
+            "### Budget unavailable\n\n"
+            "The budget agent did not return a valid estimate."
+        )
 
     return f"""
-# 💰 Estimated Trip Budget
+### 💳 Estimated trip budget
 
-### ✈️ Flight
+<div class="budget-total">
+    <span>Estimated total</span>
 
-**₹{budget.get("flight_cost", "N/A")}**
+    <strong>
+        {money(budget.get('total_estimated_cost'))}
+    </strong>
 
-### 🏨 Accommodation
+    <small>Indicative estimate · INR</small>
+</div>
 
-**₹{budget.get("hotel_cost", "N/A")}**
+| Expense | Estimate |
+|---|---:|
+| ✈️ Flight | {money(budget.get('flight_cost'))} |
+| 🏨 Accommodation | {money(budget.get('hotel_cost'))} |
+| 🍽️ Food and local expenses | {money(budget.get('other_expenses'))} |
 
-### 🍽️ Other Expenses
-
-**₹{budget.get("other_expenses", "N/A")}**
-
----
-
-# 💰 Total Estimated Cost
-
-## ₹{budget.get("total_estimated_cost", "N/A")}
-
+> This is a rough estimate based on the current budget agent.
+> Flight and hotel data are simulated.
 """
 
 
-# ---------------------------------------------------
-# SUMMARY CARDS
-# ---------------------------------------------------
+# ============================================================
+# TRIP SUMMARY CARDS
+# ============================================================
 
-def create_summary_cards(destination, days, weather, activities, budget):
+def summary_cards(
+    origin,
+    destination,
+    days,
+    weather,
+    activities,
+    budget
+):
+    weather = weather if isinstance(weather, dict) else {}
+    budget = budget if isinstance(budget, dict) else {}
 
-    temperature = weather.get("temperature", "N/A")
-    attractions = len(activities)
-    total_budget = budget.get("total_estimated_cost", "N/A")
+    temperature = safe_text(
+        weather.get("temperature", "—")
+    )
+
+    total = money(
+        budget.get("total_estimated_cost")
+    )
 
     return f"""
-    <div class="summary-grid">
+    <div class="metrics-grid">
 
-        <div class="summary-card">
-            <div class="card-icon">📍</div>
-            <div class="card-label">DESTINATION</div>
-            <div class="card-value">{destination}</div>
+        <div class="metric">
+            <span>ROUTE</span>
+            <strong>
+                {safe_text(origin)} → {safe_text(destination)}
+            </strong>
+            <small>Trip route</small>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon">📅</div>
-            <div class="card-label">TRIP DURATION</div>
-            <div class="card-value">{days} Days</div>
+        <div class="metric">
+            <span>DURATION</span>
+            <strong>{int(days)} days</strong>
+            <small>Planned stay</small>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon">🌡️</div>
-            <div class="card-label">TEMPERATURE</div>
-            <div class="card-value">{temperature}°C</div>
+        <div class="metric">
+            <span>WEATHER</span>
+            <strong>{temperature}°C</strong>
+            <small>Latest available snapshot</small>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon">📍</div>
-            <div class="card-label">ATTRACTIONS</div>
-            <div class="card-value">{attractions} Found</div>
+        <div class="metric">
+            <span>ATTRACTIONS</span>
+            <strong>{len(activities or [])}</strong>
+            <small>Places returned by API</small>
         </div>
 
-        <div class="summary-card">
-            <div class="card-icon">💰</div>
-            <div class="card-label">ESTIMATED BUDGET</div>
-            <div class="card-value">₹{total_budget}</div>
+        <div class="metric metric-highlight">
+            <span>ESTIMATED BUDGET</span>
+            <strong>{total}</strong>
+            <small>Indicative · INR</small>
         </div>
 
     </div>
     """
 
 
-# ---------------------------------------------------
-# MAIN FUNCTION
-# ---------------------------------------------------
+# ============================================================
+# AGENT STATUS PANEL
+# Note: this represents overall workflow completion, not
+# independent verification of every agent's execution.
+# ============================================================
 
-def plan_trip(origin, destination, days):
+def status_html(state, detail=""):
+    agents = [
+        ("Transport Agent", "Flight options"),
+        ("Accommodation Agent", "Hotel suggestions"),
+        ("Activity Agent", "Tourist attractions"),
+        ("Weather Agent", "Destination weather"),
+        ("Budget Agent", "Cost estimate"),
+        ("Recommendation Agent", "Gemini itinerary"),
+    ]
 
-    # Validate inputs
-    if not origin or not destination:
-        error = """
-        <div class="error-box">
-            ⚠️ Please enter both Origin and Destination.
+    complete = state == "complete"
+
+    title = (
+        "Travel plan generated"
+        if complete
+        else "Preparing your trip"
+    )
+
+    icon = "✓" if complete else "↻"
+
+    status_text = "Workflow returned" if complete else "Queued"
+
+    items = ""
+
+    for agent_name, description in agents:
+        check = "✓" if complete else "•"
+
+        items += f"""
+        <div class="agent-pill">
+
+            <span class="agent-check">{check}</span>
+
+            <div>
+                <strong>{agent_name}</strong>
+                <small>{description}</small>
+            </div>
+
+            <em>{status_text}</em>
+
         </div>
         """
 
-        yield (
-            error,
-            gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-        )
+    extra = (
+        f'<p class="status-detail">{safe_text(detail)}</p>'
+        if detail
+        else ""
+    )
 
+    description = (
+        "The workflow returned results from the connected agents."
+        if complete
+        else "Agents will run through your existing TravelWorkflow."
+    )
+
+    return f"""
+    <section class="status-panel">
+
+        <div class="status-heading">
+
+            <span class="status-orb">{icon}</span>
+
+            <div>
+                <h3>{title}</h3>
+                <p>{description}</p>
+            </div>
+
+        </div>
+
+        <div class="agent-list">
+            {items}
+        </div>
+
+        {extra}
+
+    </section>
+    """
+
+
+# ============================================================
+# MAIN TRAVEL PLANNING FUNCTION
+# ============================================================
+
+def plan_trip(origin, destination, days):
+    origin = (origin or "").strip()
+    destination = (destination or "").strip()
+
+    if not origin or not destination:
+        yield (
+            '<div class="error-panel">'
+            '<strong>Missing trip details</strong>'
+            '<p>Enter both your starting city and destination.</p>'
+            '</div>',
+            gr.update(visible=False),
+            "", "", "", "", "", "", "", ""
+        )
         return
 
     try:
-
         days = int(days)
 
-        if days <= 0:
-            raise ValueError("Number of days must be greater than 0.")
+        if not 1 <= days <= 30:
+            raise ValueError(
+                "Choose a trip duration between 1 and 30 days."
+            )
 
-        # ---------------------------------------------------
-        # SHOW EXECUTION STATUS FIRST
-        # ---------------------------------------------------
-
-        status_running = """
-        <div class="agent-status">
-
-            <h3>🤖 Multi-Agent System Execution</h3>
-
-            <div class="agent-item">🔄 Transport Agent → Finding flight options...</div>
-            <div class="agent-item">🔄 Accommodation Agent → Finding hotels...</div>
-            <div class="agent-item">🔄 Activity Agent → Fetching tourist attractions...</div>
-            <div class="agent-item">🔄 Weather Agent → Fetching live weather...</div>
-            <div class="agent-item">🔄 Budget Agent → Calculating trip expenses...</div>
-            <div class="agent-item">🔄 Recommendation Agent → Gemini is generating your itinerary...</div>
-
-        </div>
-        """
-
+        # Initial progress display.
         yield (
-            status_running,
+            status_html("running"),
             gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
+            "", "", "", "", "", "", "", ""
         )
 
-        # ---------------------------------------------------
-        # RUN COMPLETE WORKFLOW
-        # ---------------------------------------------------
-
+        # Call your existing agent workflow.
         result = workflow.run(
             origin=origin,
             destination=destination,
-            days=days
-        )
-
-        # ---------------------------------------------------
-        # EXTRACT RESULTS
-        # ---------------------------------------------------
-
-        flights = result["transport"]["transport"]
-
-        hotels = result["accommodation"]["accommodation"]
-
-        activities = result["activities"]["activities"]
-
-        weather = result["weather"]["weather"]
-
-        budget = result["budget"]
-
-        recommendation = result["recommendation"]
-
-        # ---------------------------------------------------
-        # FORMAT RESULTS
-        # ---------------------------------------------------
-
-        flights_text = format_flights(flights)
-
-        hotels_text = format_hotels(hotels)
-
-        activities_text = format_activities(activities)
-
-        weather_text = format_weather(weather)
-
-        budget_text = format_budget(budget)
-
-        summary_cards = create_summary_cards(
-            destination=destination,
             days=days,
-            weather=weather,
-            activities=activities,
-            budget=budget
         )
 
-        map_html = create_map(
-            destination=destination,
-            activities=activities
+        # Extract the existing workflow outputs.
+        flights = (
+            result.get("transport", {}).get("transport", [])
         )
 
-        # ---------------------------------------------------
-        # COMPLETED AGENT STATUS
-        # ---------------------------------------------------
+        hotels = (
+            result.get("accommodation", {}).get(
+                "accommodation", []
+            )
+        )
 
-        status_completed = """
-        <div class="agent-status success">
+        activities = (
+            result.get("activities", {}).get(
+                "activities", []
+            )
+        )
 
-            <h3>✅ Multi-Agent System Completed Successfully</h3>
+        weather = (
+            result.get("weather", {}).get("weather")
+        )
 
-            <div class="agent-item">✅ Transport Agent → Flight options generated</div>
-            <div class="agent-item">✅ Accommodation Agent → Hotel options generated</div>
-            <div class="agent-item">✅ Activity Agent → Tourist attractions fetched</div>
-            <div class="agent-item">✅ Weather Agent → Live weather data fetched</div>
-            <div class="agent-item">✅ Budget Agent → Trip budget calculated</div>
-            <div class="agent-item">🤖 Recommendation Agent → Gemini itinerary generated</div>
+        budget = result.get("budget", {})
 
-        </div>
-        """
+        recommendation = (
+            result.get("recommendation")
+            or (
+                "The recommendation agent did not return "
+                "an itinerary. Check your Gemini API configuration."
+            )
+        )
 
-        # ---------------------------------------------------
-        # RETURN FINAL RESULTS
-        # ---------------------------------------------------
-
+        # Display the completed results.
         yield (
-            status_completed,
+            status_html("complete"),
             gr.update(visible=True),
-            summary_cards,
-            flights_text,
-            hotels_text,
-            activities_text,
-            weather_text,
-            budget_text,
-            recommendation,
-            map_html
+
+            summary_cards(
+                origin,
+                destination,
+                days,
+                weather,
+                activities,
+                budget,
+            ),
+
+            format_flights(flights),
+            format_hotels(hotels),
+            format_activities(activities),
+            format_weather(weather),
+            format_budget(budget),
+            str(recommendation),
+            create_map(destination, activities),
         )
 
-    except Exception as e:
-
-        error_message = f"""
-        <div class="error-box">
-
-        <h3>❌ Something went wrong</h3>
-
-        <p>{html.escape(str(e))}</p>
-
-        </div>
-        """
+    except Exception as exc:
+        message = safe_text(exc)
 
         yield (
-            error_message,
+            f"""
+            <div class="error-panel">
+                <strong>We could not generate this trip</strong>
+                <p>{message}</p>
+                <small>
+                    Check API keys, network access, and the
+                    error details in your terminal.
+                </small>
+            </div>
+            """,
+
             gr.update(visible=False),
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
+
+            "", "", "", "", "", "", "", ""
         )
 
 
-# ---------------------------------------------------
+# ============================================================
 # CUSTOM CSS
-# ---------------------------------------------------
+# ============================================================
 
-custom_css = """
+CSS = r"""
+@import url(
+'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap'
+);
+
+:root {
+    --travel-ink: #18243b;
+    --travel-muted: #77839a;
+    --travel-purple: #6657e8;
+    --travel-border: #e6eaf2;
+}
 
 .gradio-container {
-    max-width: 1400px !important;
+    max-width: 1440px !important;
     margin: auto !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: #f6f8fc !important;
 }
 
-.hero {
-    padding: 35px;
-    border-radius: 18px;
-    margin-bottom: 20px;
-    text-align: center;
+#travel-shell {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 12px 0 38px;
 }
 
-.hero h1 {
-    font-size: 42px;
-    margin-bottom: 10px;
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 4px 22px;
+    gap: 12px;
 }
 
-.hero p {
-    font-size: 18px;
-    opacity: 0.8;
+.brand {
+    font: 800 20px Manrope, sans-serif;
+    color: #18243b;
+    letter-spacing: -.6px;
 }
 
-.input-section {
-    border-radius: 18px;
-    padding: 20px;
-    margin-bottom: 15px;
+.brand span {
+    color: #6657e8;
 }
 
-.summary-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 15px;
-    margin: 20px 0;
-}
-
-.summary-card {
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid rgba(128,128,128,0.25);
-    text-align: center;
-}
-
-.card-icon {
-    font-size: 28px;
-    margin-bottom: 8px;
-}
-
-.card-label {
+.nav-note {
+    color: #758198;
     font-size: 12px;
-    opacity: 0.7;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+}
+
+.hero-banner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 48px 44px;
+    color: white;
+
+    background:
+        radial-gradient(
+            circle at 85% 20%,
+            rgba(167,139,250,.65),
+            transparent 30%
+        ),
+        linear-gradient(
+            120deg,
+            #152744 0%,
+            #293d70 48%,
+            #6959dc 100%
+        );
+
+    min-height: 270px;
+    box-sizing: border-box;
+}
+
+.hero-banner:after {
+    content: '✈';
+    position: absolute;
+    right: 8%;
+    top: 12%;
+    font-size: 160px;
+    opacity: .13;
+    transform: rotate(-15deg);
+}
+
+.hero-kicker {
+    color: #cbd5ff;
+    font-size: 11px;
+    letter-spacing: 2px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.hero-banner h1 {
+    font: 800 clamp(32px,4vw,48px)/1.1 Manrope, sans-serif;
+    letter-spacing: -1.8px;
+    margin: 16px 0 12px;
+    max-width: 720px;
+    color: white;
+}
+
+.hero-banner p {
+    color: #e3e8ff;
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 640px;
+    margin: 0;
+}
+
+.section-label {
+    font: 800 19px Manrope, sans-serif;
+    color: #1d2b45;
+    margin: 0 0 5px;
+}
+
+.section-sub {
+    color: #8390a6;
+    font-size: 13px;
+    margin-bottom: 18px;
+}
+
+.search-panel {
+    background: white;
+    border: 1px solid var(--travel-border);
+    border-radius: 22px;
+    padding: 24px;
+    margin-top: -28px;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 16px 44px rgba(28,44,80,.09);
+}
+
+.search-panel label {
+    color: #526079 !important;
+    font-weight: 700 !important;
+}
+
+.search-panel input {
+    border-radius: 12px !important;
+    min-height: 48px !important;
+}
+
+#generate-btn {
+    background: linear-gradient(
+        100deg,
+        #6758e9,
+        #8770f3
+    ) !important;
+
+    border: 0 !important;
+    border-radius: 12px !important;
+    min-height: 50px;
+    font-weight: 800 !important;
+    box-shadow: 0 8px 18px rgba(102,87,232,.22);
+}
+
+.results-title {
+    font: 800 22px Manrope, sans-serif;
+    color: #1b2943;
+    margin: 28px 0 14px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0 22px;
+}
+
+.metric {
+    background: #fff;
+    border: 1px solid var(--travel-border);
+    border-radius: 17px;
+    padding: 18px 16px;
+    min-width: 0;
+    box-shadow: 0 4px 15px rgba(32,50,82,.025);
+}
+
+.metric span {
+    display: block;
+    color: #8994a8;
+    font-size: 10px;
+    letter-spacing: 1.1px;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.metric strong {
+    display: block;
+    font: 800 20px Manrope, sans-serif;
+    color: #202d47;
+    overflow-wrap: anywhere;
+}
+
+.metric strong b {
+    color: #7669e9;
+}
+
+.metric small {
+    display: block;
+    color: #9aa4b6;
+    font-size: 11px;
+    margin-top: 8px;
+}
+
+.metric-highlight {
+    background: linear-gradient(145deg, #f0edff, #fff);
+    border-color: #dcd6ff;
+}
+
+.status-panel {
+    border: 1px solid #e3e8f2;
+    background: #fff;
+    border-radius: 20px;
+    padding: 20px;
+    margin: 22px 0;
+}
+
+.status-heading {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.status-orb {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    background: #eeeaff;
+    color: #6657e8;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.status-heading h3 {
+    margin: 0 0 4px;
+    font: 800 17px Manrope, sans-serif;
+    color: #1d2b45;
+}
+
+.status-heading p,
+.status-detail {
+    margin: 0;
+    font-size: 12px;
+    color: #8792a6;
+}
+
+.agent-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.agent-pill {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid #edf0f6;
+    background: #fafbfe;
+    border-radius: 12px;
+    padding: 12px;
+    min-width: 0;
+}
+
+.agent-check {
+    display: grid;
+    place-items: center;
+    width: 27px;
+    height: 27px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    color: #6657e8;
+    background: #eeebff;
+    font-weight: 900;
+}
+
+.agent-pill div {
+    min-width: 0;
+}
+
+.agent-pill strong {
+    display: block;
+    font-size: 12px;
+    color: #34415b;
+}
+
+.agent-pill small {
+    display: block;
+    font-size: 10px;
+    color: #929db0;
+    margin-top: 3px;
+}
+
+.agent-pill em {
+    margin-left: auto;
+    font-size: 9px;
+    color: #8a94a7;
+    font-style: normal;
+}
+
+.tabs {
+    border: 1px solid #e5eaf2 !important;
+    border-radius: 18px !important;
+    background: white !important;
+    padding: 10px !important;
+}
+
+.tab-nav button {
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+}
+
+.tabitem {
+    padding: 16px 10px !important;
+}
+
+.weather-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.weather-tile {
+    background: #f7f8ff;
+    border: 1px solid #e8eaff;
+    border-radius: 13px;
+    padding: 16px;
+}
+
+.weather-tile span {
+    display: block;
+    font-size: 11px;
+    color: #8490a5;
     margin-bottom: 8px;
 }
 
-.card-value {
-    font-size: 18px;
-    font-weight: bold;
+.weather-tile strong {
+    font: 800 19px Manrope, sans-serif;
+    color: #2d3a57;
+    overflow-wrap: anywhere;
 }
 
-.agent-status {
-    border-radius: 16px;
-    padding: 20px;
-    margin: 15px 0;
-    border: 1px solid rgba(128,128,128,0.3);
+.budget-total {
+    background: linear-gradient(110deg, #1d2c4a, #5148a7);
+    color: white;
+    border-radius: 17px;
+    padding: 22px;
+    margin: 14px 0 18px;
 }
 
-.agent-status h3 {
-    margin-top: 0;
+.budget-total span,
+.budget-total small {
+    display: block;
+    color: #d4d9ff;
+    font-size: 12px;
 }
 
-.agent-item {
-    padding: 8px;
-    margin: 5px 0;
-    border-radius: 8px;
+.budget-total strong {
+    display: block;
+    color: white;
+    font: 800 32px Manrope, sans-serif;
+    margin: 6px 0;
 }
 
-.error-box {
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #cc4444;
-}
-
-.map-container {
-    width: 100%;
-    height: 500px;
-    border-radius: 16px;
+.map-frame {
+    height: 480px;
     overflow: hidden;
-    border: 1px solid rgba(128,128,128,0.3);
+    border-radius: 16px;
+    border: 1px solid #e2e7f0;
 }
 
-#travel-map {
-    width: 100%;
-    height: 500px;
+.empty-state,
+.error-panel {
+    padding: 22px;
+    border-radius: 15px;
+    background: #fff;
+    border: 1px solid #e5eaf2;
+    color: #59667f;
 }
 
-.empty-card {
-    padding: 30px;
+.error-panel {
+    border-color: #ffd4d4;
+    background: #fff8f8;
+}
+
+.error-panel strong {
+    color: #b42332;
+    font-size: 16px;
+}
+
+.error-panel p {
+    color: #714b54;
+}
+
+.footer-note {
     text-align: center;
-    border: 1px solid rgba(128,128,128,0.3);
-    border-radius: 12px;
+    color: #9aa4b5;
+    font-size: 11px;
+    padding: 25px 0 0;
 }
 
-@media (max-width: 900px) {
-
-    .summary-grid {
-        grid-template-columns: repeat(2, 1fr);
+@media(max-width: 900px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .agent-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .hero-banner {
+        padding: 34px 25px;
+    }
+
+    .weather-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
+@media(max-width: 560px) {
+    #travel-shell {
+        padding: 4px 0 24px;
+    }
+
+    .hero-banner {
+        border-radius: 20px;
+        padding: 28px 20px;
+    }
+
+    .search-panel {
+        padding: 16px;
+        margin-top: -16px;
+    }
+
+    .metrics-grid,
+    .agent-list {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .metric {
+        padding: 14px 11px;
+    }
+
+    .metric strong {
+        font-size: 16px;
+    }
+
+    .nav-note {
+        display: none;
+    }
+}
 """
 
 
-# ---------------------------------------------------
-# GRADIO UI
-# ---------------------------------------------------
+# ============================================================
+# GRADIO INTERFACE
+# ============================================================
 
 with gr.Blocks(
-    title="Agentic AI Travel Planner",
-    theme=gr.themes.Soft(),
-    css=custom_css
+    title="Voyage AI | Agentic Travel Planner",
+    theme=gr.themes.Base(
+        primary_hue="violet",
+        neutral_hue="slate",
+    ),
+    css=CSS,
 ) as app:
 
-    # HERO SECTION
+    with gr.Column(elem_id="travel-shell"):
 
-    gr.HTML("""
-    <div class="hero">
+        gr.HTML("""
+        <div class="top-nav">
+            <div class="brand">✈ Voyage<span>AI</span></div>
 
-        <h1>✈️ Agentic AI Travel Planner</h1>
+            <div class="nav-note">
+                INTELLIGENT TRIP PLANNING · MULTI-AGENT AI
+            </div>
+        </div>
 
-        <p>
-            Plan intelligent trips using
-            <b>Multi-Agent AI</b>,
-            <b>Real-Time APIs</b>
-            and
-            <b>Gemini Generative AI</b>.
-        </p>
+        <section class="hero-banner">
+            <div class="hero-kicker">
+                Your next journey, thoughtfully planned
+            </div>
 
-    </div>
-    """)
+            <h1>
+                Travel better.<br>
+                Discover more.
+            </h1>
 
-    # INPUT SECTION
+            <p>
+                Build a personalized itinerary with specialized AI
+                agents, destination discovery, weather insights
+                and a practical trip budget.
+            </p>
+        </section>
+        """)
 
-    with gr.Group():
+        with gr.Group(elem_classes=["search-panel"]):
 
-        gr.Markdown("## 🧳 Plan Your Journey")
+            gr.HTML("""
+            <div class="section-label">
+                Plan your journey
+            </div>
 
-        with gr.Row():
+            <div class="section-sub">
+                Enter your route and trip duration to get a
+                tailored travel plan.
+            </div>
+            """)
 
-            origin = gr.Textbox(
-                label="📍 From",
-                placeholder="Example: Hyderabad",
-                scale=2
+            with gr.Row():
+                origin = gr.Textbox(
+                    label="Starting city",
+                    placeholder="e.g. Hyderabad",
+                    scale=2,
+                )
+
+                destination = gr.Textbox(
+                    label="Destination",
+                    placeholder="e.g. Goa",
+                    scale=2,
+                )
+
+                days = gr.Number(
+                    label="Days",
+                    value=3,
+                    precision=0,
+                    minimum=1,
+                    maximum=30,
+                    scale=1,
+                )
+
+            plan_button = gr.Button(
+                "✦  Generate my travel plan",
+                variant="primary",
+                size="lg",
+                elem_id="generate-btn",
             )
 
-            destination = gr.Textbox(
-                label="📍 To",
-                placeholder="Example: Goa",
-                scale=2
-            )
+        agent_status = gr.HTML()
 
-            days = gr.Number(
-                label="📅 Days",
-                value=3,
-                precision=0,
-                minimum=1,
-                scale=1
-            )
+        with gr.Column(visible=False) as results_section:
 
-        plan_button = gr.Button(
-            "✨ Generate AI Travel Plan",
-            variant="primary",
-            size="lg"
-        )
+            gr.HTML("""
+            <div class="results-title">
+                Your trip at a glance
+            </div>
+            """)
 
-    # AGENT STATUS
+            summary_output = gr.HTML()
 
-    agent_status = gr.HTML()
+            with gr.Tabs():
 
-    # RESULTS
+                with gr.Tab("✈ Flights"):
+                    flights_output = gr.Markdown()
 
-    with gr.Column(visible=False) as results_section:
+                with gr.Tab("⌂ Hotels"):
+                    hotels_output = gr.Markdown()
 
-        gr.Markdown("## 📊 Trip Overview")
+                with gr.Tab("📍 Attractions"):
+                    activities_output = gr.Markdown()
 
-        summary_output = gr.HTML()
+                with gr.Tab("☼ Weather"):
+                    weather_output = gr.Markdown()
 
-        with gr.Tabs():
+                with gr.Tab("₹ Budget"):
+                    budget_output = gr.Markdown()
 
-            # FLIGHTS
-            with gr.Tab("✈️ Flights"):
-                flights_output = gr.Markdown()
+                with gr.Tab("✧ AI itinerary"):
+                    recommendation_output = gr.Markdown()
 
-            # HOTELS
-            with gr.Tab("🏨 Hotels"):
-                hotels_output = gr.Markdown()
+                with gr.Tab("⌖ Map"):
+                    map_output = gr.HTML()
 
-            # ACTIVITIES
-            with gr.Tab("📍 Places to Visit"):
-                activities_output = gr.Markdown()
-
-            # WEATHER
-            with gr.Tab("🌦️ Weather"):
-                weather_output = gr.Markdown()
-
-            # BUDGET
-            with gr.Tab("💰 Budget"):
-                budget_output = gr.Markdown()
-
-            # AI ITINERARY
-            with gr.Tab("🤖 AI Travel Plan"):
-                recommendation_output = gr.Markdown()
-
-            # MAP
-            with gr.Tab("🗺️ Destination Map"):
-                map_output = gr.HTML()
-
-    # BUTTON CLICK
+        gr.HTML("""
+        <div class="footer-note">
+            Voyage AI · Powered by your existing travel agents
+            and connected APIs.
+            <br>
+            Flight and hotel data are currently simulated;
+            weather and attractions depend on API availability.
+        </div>
+        """)
 
     plan_button.click(
         fn=plan_trip,
-
         inputs=[
             origin,
             destination,
-            days
+            days,
         ],
-
         outputs=[
             agent_status,
             results_section,
@@ -763,15 +1184,10 @@ with gr.Blocks(
             weather_output,
             budget_output,
             recommendation_output,
-            map_output
-        ]
+            map_output,
+        ],
     )
 
 
-# ---------------------------------------------------
-# RUN APPLICATION
-# ---------------------------------------------------
-
 if __name__ == "__main__":
-
-    app.launch()
+    app.queue().launch()
