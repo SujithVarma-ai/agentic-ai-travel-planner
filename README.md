@@ -197,51 +197,6 @@ The current map implementation uses an embedded OpenStreetMap view. It does not 
 | Configuration | Environment variables using `.env` |
 | Styling | Custom CSS and responsive layouts |
 
-## 📁 Project Structure
-
-The application uses a modular agent-based structure.
-
-```text
-agentic-ai-travel-planner/
-│
-├── agents/
-│   ├── __init__.py
-│   ├── planning_agent.py
-│   ├── transport_agent.py
-│   ├── accommodation_agent.py
-│   ├── activity_agent.py
-│   ├── budget_agent.py
-│   └── recommendation_agent.py
-│
-├── tools/
-│   ├── __init__.py
-│   ├── transport_tools.py
-│   ├── accommodation_tools.py
-│   ├── activity_tools.py
-│   └── weather_tools.py
-│
-├── models/
-│   ├── __init__.py
-│   └── travel_models.py
-│
-├── workflow/
-│   ├── __init__.py
-│   └── travel_workflow.py
-│
-├── ui/
-│   └── gradio_app.py
-│
-├── config/
-│   └── settings.py
-│
-├── .env
-├── .gitignore
-├── requirements.txt
-└── README.md
-```
-
-*This is the documented project layout. Keep the file names aligned with the files actually present in your repository.*
-
 ## ⚙️ Installation and Setup
 
 ### Prerequisites
@@ -369,5 +324,3 @@ The objective of Voyage AI is to demonstrate how a multi-agent architecture can 
 GitHub: [SujithVarma-ai](https://github.com/SujithVarma-ai)
 
 ---
-
-*Voyage AI — Plan smarter. Explore farther.*
