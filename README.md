@@ -1,4 +1,4 @@
-# ✈️ Voyage AI — Agentic AI Travel Planner
+<img width="1592" height="853" alt="travel-planner-results" src="https://github.com/user-attachments/assets/ef111fd6-f906-4956-b158-8d420bf0affb" /><img width="1592" height="853" alt="travel-planner-results" src="https://github.com/user-attachments/assets/c5454dd7-4571-4783-a861-8e643d0a4e5a" /># ✈️ Voyage AI — Agentic AI Travel Planner
 
 **An intelligent, multi-agent travel planning application that generates personalized itineraries using specialized AI agents, external APIs, and Google Gemini.**
 
@@ -118,15 +118,10 @@ The Voyage AI dashboard is organized into the following sections:
 The `TravelWorkflow` coordinates the agents and consolidates their outputs for presentation in the Gradio interface.
 
 
-## 📸 Screenshots
+## 📸 Application Screenshots
 
-### 1. VoyageAI — Travel Planner Interface
-
-![VoyageAI home page](screenshots/travel-planner-home.png)
-
-### 2. Generated Travel Plan and Flight Options
-
-![Generated travel plan](screenshots/travel-planner-results.png)
+![App Screenshot](https://github.com/SujithVarma-ai/agentic-ai-travel-planner/blob/main/Screenshot%202026-10-25%20212309.png)
+![App Screenshot](https://github.com/SujithVarma-ai/agentic-ai-travel-planner/blob/main/Screenshot%202026-10-25%20211732.png)
 
 ## 🔌 API Integrations
 
