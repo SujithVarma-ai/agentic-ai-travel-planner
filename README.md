@@ -120,8 +120,7 @@ The `TravelWorkflow` coordinates the agents and consolidates their outputs for p
 
 ## 📸 Application Screenshots
 
-![App Screenshot](https://github.com/SujithVarma-ai/agentic-ai-travel-planner/blob/main/Screenshot%202026-10-25%20212309.png)
-![App Screenshot](https://github.com/SujithVarma-ai/agentic-ai-travel-planner/blob/main/Screenshot%202026-10-25%20211732.png)
+<img width="1592" height="853" alt="travel-planner-results" src="https://github.com/user-attachments/assets/ef111fd6-f906-4956-b158-8d420bf0affb" /><img width="1592" height="853" alt="travel-planner-results" src="https://github.com/user-attachments/assets/c5454dd7-4571-4783-a861-8e643d0a4e5a" />
 
 ## 🔌 API Integrations
 
