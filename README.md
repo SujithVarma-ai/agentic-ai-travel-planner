@@ -117,9 +117,6 @@ The Voyage AI dashboard is organized into the following sections:
 
 The `TravelWorkflow` coordinates the agents and consolidates their outputs for presentation in the Gradio interface.
 
-
-## 📸 Application Screenshots
-
 <img width="1592" height="853" alt="travel-planner-results" src="https://github.com/user-attachments/assets/ef111fd6-f906-4956-b158-8d420bf0affb" />
 
 ## 🔌 API Integrations
