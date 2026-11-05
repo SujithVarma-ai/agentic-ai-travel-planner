@@ -8,11 +8,13 @@ Voyage AI helps users plan trips by combining destination discovery, weather inf
 
 ## 🌍 Overview
 
-Planning a trip often involves searching across multiple platforms for attractions, weather forecasts, transportation, accommodation, and estimated expenses.
+Voyage AI is an Agentic AI-based Travel Planning System designed to simplify trip planning. Users enter their starting city, destination, and travel duration.
 
-**Voyage AI brings these steps together in one application.** Users enter their starting city, destination, and trip duration. The system coordinates specialized agents to collect available information, estimate expenses, and generate a personalized itinerary.
+The system coordinates six specialised agents to handle transportation, accommodation, tourist attractions, weather, budget estimation, and itinerary generation.
 
-The application features a premium dashboard with a responsive layout, trip summary cards, agent status indicators, dedicated result tabs, and an interactive OpenStreetMap view.
+Using Google Gemini and external APIs, Voyage AI generates a personalised day-wise travel plan and displays the results through an interactive Gradio dashboard with summary cards, result tabs, and an OpenStreetMap view.
+
+The main goal is to make travel planning easier, faster, and more organised through **Agentic AI**.
 
 ## ✨ Key Features
 
